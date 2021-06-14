@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-
 #ifndef __OCF_DEF_H__
 #define __OCF_DEF_H__
 
@@ -112,34 +111,34 @@
  * This Enumerator describes OCF cache instance state
  */
 typedef enum {
-	ocf_cache_state_running = 0,     //!< ocf_cache_state_running
-		/*!< OCF is currently running */
+    ocf_cache_state_running = 0,     //!< ocf_cache_state_running
+    /*!< OCF is currently running */
 
-	ocf_cache_state_stopping = 1,    //!< ocf_cache_state_stopping
-		/*!< OCF cache instance is stopping */
+    ocf_cache_state_stopping = 1,    //!< ocf_cache_state_stopping
+    /*!< OCF cache instance is stopping */
 
-	ocf_cache_state_initializing = 2, //!< ocf_cache_state_initializing
-		/*!< OCF cache instance during initialization */
+    ocf_cache_state_initializing = 2, //!< ocf_cache_state_initializing
+    /*!< OCF cache instance during initialization */
 
-	ocf_cache_state_incomplete = 3, //!< ocf_cache_state_incomplete
-		/*!< OCF cache has at least one inactive core */
+    ocf_cache_state_incomplete = 3, //!< ocf_cache_state_incomplete
+    /*!< OCF cache has at least one inactive core */
 
-	ocf_cache_state_max              //!< ocf_cache_state_max
-		/*!< Stopper of cache state enumerator */
+    ocf_cache_state_max              //!< ocf_cache_state_max
+    /*!< Stopper of cache state enumerator */
 } ocf_cache_state_t;
 
 /**
  * This Enumerator describes OCF core instance state
  */
 typedef enum {
-	ocf_core_state_active = 0,
-		/*!< Core is active */
+    ocf_core_state_active = 0,
+    /*!< Core is active */
 
-	ocf_core_state_inactive,
-		/*!< Core is inactive (not attached) */
+    ocf_core_state_inactive,
+    /*!< Core is inactive (not attached) */
 
-	ocf_core_state_max,
-		/*!< Stopper of core state enumerator */
+    ocf_core_state_max,
+    /*!< Stopper of core state enumerator */
 } ocf_core_state_t;
 
 
@@ -147,32 +146,32 @@ typedef enum {
  * OCF supported cache modes
  */
 typedef enum {
-	ocf_cache_mode_wt = 0,
-		/*!< Write-through cache mode */
+    ocf_cache_mode_wt = 0,
+    /*!< Write-through cache mode */
 
-	ocf_cache_mode_wb,
-		/*!< Write-back cache mode */
+    ocf_cache_mode_wb,
+    /*!< Write-back cache mode */
 
-	ocf_cache_mode_wa,
-		/*!< Write-around cache mode */
+    ocf_cache_mode_wa,
+    /*!< Write-around cache mode */
 
-	ocf_cache_mode_pt,
-		/*!< Pass-through cache mode */
+    ocf_cache_mode_pt,
+    /*!< Pass-through cache mode */
 
-	ocf_cache_mode_wi,
-		/*!< Write invalidate cache mode */
+    ocf_cache_mode_wi,
+    /*!< Write invalidate cache mode */
 
-	ocf_cache_mode_wo,
-		/*!< Write-only cache mode */
+    ocf_cache_mode_wo,
+    /*!< Write-only cache mode */
 
-	ocf_cache_mode_max,
-		/*!< Stopper of cache mode enumerator */
+    ocf_cache_mode_max,
+    /*!< Stopper of cache mode enumerator */
 
-	ocf_cache_mode_default = ocf_cache_mode_wt,
-		/*!< Default cache mode */
+    ocf_cache_mode_default = ocf_cache_mode_wt,
+    /*!< Default cache mode */
 
-	ocf_cache_mode_none = -1,
-		/*!< Current cache mode of given cache instance */
+    ocf_cache_mode_none = -1,
+    /*!< Current cache mode of given cache instance */
 } ocf_cache_mode_t;
 
 #define OCF_SEQ_CUTOFF_PERCORE_STREAMS 128
@@ -183,123 +182,138 @@ typedef enum {
 #define OCF_SEQ_CUTOFF_MAX_PROMOTION_COUNT 65535
 
 typedef enum {
-	ocf_seq_cutoff_policy_always = 0,
-		/*!< Sequential cutoff always on */
+    ocf_seq_cutoff_policy_always = 0,
+    /*!< Sequential cutoff always on */
 
-	ocf_seq_cutoff_policy_full,
-		/*!< Sequential cutoff when occupancy is 100% */
+    ocf_seq_cutoff_policy_full,
+    /*!< Sequential cutoff when occupancy is 100% */
 
-	ocf_seq_cutoff_policy_never,
-		/*!< Sequential cutoff disabled */
+    ocf_seq_cutoff_policy_never,
+    /*!< Sequential cutoff disabled */
 
-	ocf_seq_cutoff_policy_max,
-		/*!< Stopper of sequential cutoff policy enumerator */
+    ocf_seq_cutoff_policy_max,
+    /*!< Stopper of sequential cutoff policy enumerator */
 
-	ocf_seq_cutoff_policy_default = ocf_seq_cutoff_policy_full,
-		/*!< Default sequential cutoff policy*/
+    ocf_seq_cutoff_policy_default = ocf_seq_cutoff_policy_full,
+    /*!< Default sequential cutoff policy*/
 } ocf_seq_cutoff_policy;
 
 /**
  * OCF supported eviction policy types
  */
 typedef enum {
-	ocf_eviction_lru = 0,
-		/*!< Last recently used eviction policy */
+    ocf_eviction_lru = 0,
+    /*!< Last recently used eviction policy */
 
-	ocf_eviction_max,
-		/*!< Stopper of enumerator */
+    ocf_eviction_lru_no_balance,
+    /*!< First In First Out no_balanced eviction policy */
 
-	ocf_eviction_default = ocf_eviction_lru,
-		/*!< Default eviction policy */
+    ocf_eviction_fifo,
+    /*!< First In First Out eviction policy */
+
+    ocf_eviction_fifo_no_balance,
+    /*!< First In First Out no_balanced eviction policy */
+
+    ocf_eviction_lfu,
+    /*!< First In First Out eviction policy */
+
+    ocf_eviction_lfu_no_balance,
+    /*!< First In First Out no_balanced eviction policy */
+
+    ocf_eviction_max,
+    /*!< Stopper of enumerator */
+
+    ocf_eviction_default = ocf_eviction_lru,
+    /*!< Default eviction policy */
 } ocf_eviction_t;
 
 /**
  * OCF supported promotion policy types
  */
 typedef enum {
-	ocf_promotion_always = 0,
-		/*!< No promotion policy. Cache inserts are not filtered */
+    ocf_promotion_always = 0,
+    /*!< No promotion policy. Cache inserts are not filtered */
 
-	ocf_promotion_nhit,
-		/*!< Line can be inserted after N requests for it */
+    ocf_promotion_nhit,
+    /*!< Line can be inserted after N requests for it */
 
-	ocf_promotion_max,
-		/*!< Stopper of enumerator */
+    ocf_promotion_max,
+    /*!< Stopper of enumerator */
 
-	ocf_promotion_default = ocf_promotion_always,
-		/*!< Default promotion policy */
+    ocf_promotion_default = ocf_promotion_always,
+    /*!< Default promotion policy */
 } ocf_promotion_t;
 
 /**
  * OCF supported Write-Back cleaning policies type
  */
 typedef enum {
-	ocf_cleaning_nop = 0,
-		/*!< Cleaning won't happen in background. Only on eviction or
-		 * during cache stop
-		 */
+    ocf_cleaning_nop = 0,
+    /*!< Cleaning won't happen in background. Only on eviction or
+     * during cache stop
+     */
 
-	ocf_cleaning_alru,
-		/*!< Approximately recently used. Cleaning thread in the
-		 * background enabled which cleans dirty data during IO
-		 * inactivity.
-		 */
+    ocf_cleaning_alru,
+    /*!< Approximately recently used. Cleaning thread in the
+     * background enabled which cleans dirty data during IO
+     * inactivity.
+     */
 
-	ocf_cleaning_acp,
-		/*!< Cleaning algorithm attempts to reduce core device seek
-		 * distance. Cleaning thread runs concurrently with I/O.
-		 */
+    ocf_cleaning_acp,
+    /*!< Cleaning algorithm attempts to reduce core device seek
+     * distance. Cleaning thread runs concurrently with I/O.
+     */
 
-	ocf_cleaning_max,
-		/*!< Stopper of enumerator */
+    ocf_cleaning_max,
+    /*!< Stopper of enumerator */
 
-	ocf_cleaning_default = ocf_cleaning_alru,
-		/*!< Default cleaning policy type */
+    ocf_cleaning_default = ocf_cleaning_alru,
+    /*!< Default cleaning policy type */
 } ocf_cleaning_t;
 
 /**
  * OCF supported cache line sizes in bytes
  */
 typedef enum {
-	ocf_cache_line_size_none = 0,
-		/*!< None */
+    ocf_cache_line_size_none = 0,
+    /*!< None */
 
-	ocf_cache_line_size_4 = 4 * KiB,
-		/*!< 4 kiB */
+    ocf_cache_line_size_4 = 4 * KiB,
+    /*!< 4 kiB */
 
-	ocf_cache_line_size_8 = 8 * KiB,
-		/*!< 8 kiB */
+    ocf_cache_line_size_8 = 8 * KiB,
+    /*!< 8 kiB */
 
-	ocf_cache_line_size_16 = 16 * KiB,
-		/*!< 16 kiB */
+    ocf_cache_line_size_16 = 16 * KiB,
+    /*!< 16 kiB */
 
-	ocf_cache_line_size_32 = 32 * KiB,
-		/*!< 32 kiB */
+    ocf_cache_line_size_32 = 32 * KiB,
+    /*!< 32 kiB */
 
-	ocf_cache_line_size_64 = 64 * KiB,
-		/*!< 64 kiB */
+    ocf_cache_line_size_64 = 64 * KiB,
+    /*!< 64 kiB */
 
-	ocf_cache_line_size_default = ocf_cache_line_size_4,
-		/*!< Default cache line size */
+    ocf_cache_line_size_default = ocf_cache_line_size_4,
+    /*!< Default cache line size */
 
-	ocf_cache_line_size_min = ocf_cache_line_size_4,
-		/*!< Minimum cache line size */
+    ocf_cache_line_size_min = ocf_cache_line_size_4,
+    /*!< Minimum cache line size */
 
-	ocf_cache_line_size_max = ocf_cache_line_size_64,
-		/*!< Maximal cache line size */
+    ocf_cache_line_size_max = ocf_cache_line_size_64,
+    /*!< Maximal cache line size */
 
-	ocf_cache_line_size_inf = ~0ULL,
-		/*!< Force enum to be 64-bit */
+    ocf_cache_line_size_inf = ~0ULL,
+    /*!< Force enum to be 64-bit */
 } ocf_cache_line_size_t;
 
 /**
  * Metadata layout
  */
 typedef enum {
-	ocf_metadata_layout_striping = 0,
-	ocf_metadata_layout_seq = 1,
-	ocf_metadata_layout_max,
-	ocf_metadata_layout_default = ocf_metadata_layout_striping
+    ocf_metadata_layout_striping = 0,
+    ocf_metadata_layout_seq = 1,
+    ocf_metadata_layout_max,
+    ocf_metadata_layout_default = ocf_metadata_layout_striping
 } ocf_metadata_layout_t;
 
 /**

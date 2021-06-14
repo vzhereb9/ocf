@@ -3,17 +3,18 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef __EVICTION_LRU_STRUCTS_H__
+#ifndef __EVICTION_LFU_STRUCTS_H__
 
-#define __EVICTION_LRU_STRUCTS_H__
+#define __EVICTION_LFU_STRUCTS_H__
 
-struct lru_eviction_policy_meta {
+struct lfu_eviction_policy_meta {
 	uint32_t prev;
 	uint32_t next;
 	uint8_t hot;
+	uint32_t num_requests;
 } __attribute__((packed));
 
-struct ocf_lru_list {
+struct ocf_lfu_list {
 	uint32_t num_nodes;
 	uint32_t head;
 	uint32_t tail;
@@ -21,11 +22,11 @@ struct ocf_lru_list {
 	uint32_t last_hot;
 };
 
-struct lru_eviction_policy {
-	struct ocf_lru_list clean;
-	struct ocf_lru_list dirty;
+struct lfu_eviction_policy {
+	struct ocf_lfu_list clean;
+	struct ocf_lfu_list dirty;
 };
 
-#define OCF_LRU_HOT_RATIO 2
+#define OCF_LFU_HOT_RATIO 2
 
 #endif

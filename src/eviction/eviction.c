@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+
 #include "eviction.h"
 #include "ops.h"
 #include "../utils/utils_part.h"
@@ -18,10 +19,70 @@ struct eviction_policy_ops evict_policy_ops[ocf_eviction_max] = {
 		.dirty_cline = evp_lru_dirty_cline,
 		.clean_cline = evp_lru_clean_cline,
 		.flush_dirty = evp_lru_clean,
+        .can_ev = evp_lru_can_evict,
 		.name = "lru",
 	},
+    [ocf_eviction_lru_no_balance] = {
+        .init_cline = evp_lru_no_balance_init_cline,
+        .rm_cline = evp_lru_no_balance_rm_cline,
+        .req_clines = evp_lru_no_balance_req_clines,
+        .hot_cline = evp_lru_no_balance_hot_cline,
+        .init_evp = evp_lru_no_balance_init_evp,
+        .dirty_cline = evp_lru_no_balance_dirty_cline,
+        .clean_cline = evp_lru_no_balance_clean_cline,
+        .flush_dirty = evp_lru_no_balance_clean,
+        .can_ev = evp_lru_no_balance_can_evict,
+        .name = "lru_no_balance",
+    },
+    [ocf_eviction_fifo] = {
+        .init_cline = evp_fifo_init_cline,
+        .rm_cline = evp_fifo_rm_cline,
+        .req_clines = evp_fifo_req_clines,
+        .hot_cline = evp_fifo_hot_cline,
+        .init_evp = evp_fifo_init_evp,
+        .dirty_cline = evp_fifo_dirty_cline,
+        .clean_cline = evp_fifo_clean_cline,
+        .flush_dirty = evp_fifo_clean,
+        .can_ev = evp_fifo_can_evict,
+        .name = "fifo",
+    },
+    [ocf_eviction_fifo_no_balance] = {
+        .init_cline = evp_fifo_no_balance_init_cline,
+        .rm_cline = evp_fifo_no_balance_rm_cline,
+        .req_clines = evp_fifo_no_balance_req_clines,
+        .hot_cline = evp_fifo_no_balance_hot_cline,
+        .init_evp = evp_fifo_no_balance_init_evp,
+        .dirty_cline = evp_fifo_no_balance_dirty_cline,
+        .clean_cline = evp_fifo_no_balance_clean_cline,
+        .flush_dirty = evp_fifo_no_balance_clean,
+        .can_ev = evp_fifo_no_balance_can_evict,
+        .name = "fifo_no_balance",
+    },
+        [ocf_eviction_lfu] = {
+                .init_cline = evp_lfu_init_cline,
+                .rm_cline = evp_lfu_rm_cline,
+                .req_clines = evp_lfu_req_clines,
+                .hot_cline = evp_lfu_hot_cline,
+                .init_evp = evp_lfu_init_evp,
+                .dirty_cline = evp_lfu_dirty_cline,
+                .clean_cline = evp_lfu_clean_cline,
+                .flush_dirty = evp_lfu_clean,
+                .can_ev = evp_lfu_can_evict,
+                .name = "lfu",
+        },
+        [ocf_eviction_lfu_no_balance] = {
+                .init_cline = evp_lfu_no_balance_init_cline,
+                .rm_cline = evp_lfu_no_balance_rm_cline,
+                .req_clines = evp_lfu_no_balance_req_clines,
+                .hot_cline = evp_lfu_no_balance_hot_cline,
+                .init_evp = evp_lfu_no_balance_init_evp,
+                .dirty_cline = evp_lfu_no_balance_dirty_cline,
+                .clean_cline = evp_lfu_no_balance_clean_cline,
+                .flush_dirty = evp_lfu_no_balance_clean,
+                .can_ev = evp_lfu_can_evict,
+                .name = "lfu_no_balance",
+        },
 };
-
 static uint32_t ocf_evict_calculate(ocf_cache_t cache,
 		struct ocf_user_part *part, uint32_t to_evict)
 {
@@ -49,8 +110,9 @@ static inline uint32_t ocf_evict_part_do(struct ocf_request *req,
 	uint32_t unmapped = ocf_engine_unmapped_count(req);
 	uint32_t to_evict = 0;
 
-	if (!evp_lru_can_evict(req->cache))
-		return 0;
+    type = req->cache->conf_meta->eviction_policy_type;
+	if (!evict_policy_ops[type].can_ev(req->cache))
+        return 0;
 
 	to_evict = ocf_evict_calculate(req->cache, target_part, unmapped);
 

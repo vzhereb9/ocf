@@ -5,7 +5,7 @@
 
 
 #include "eviction.h"
-#include "lru.h"
+#include "lru_no_balance.h"
 #include "ops.h"
 #include "../utils/utils_cleaner.h"
 #include "../utils/utils_cache_line.h"
@@ -20,19 +20,18 @@
 
 static const ocf_cache_line_t end_marker = (ocf_cache_line_t)-1;
 
-/* Adds the given collision_index to the _head_ of the LRU list */
-static void add_lru_head(ocf_cache_t cache,
-		struct ocf_lru_list *list,
+/* Adds the given collision_index to the _head_ of the LRU no_balance list */
+static void add_lru_no_balance_head(ocf_cache_t cache,
+		struct ocf_lru_no_balance_list *list,
 		unsigned int collision_index)
 
 {
-	struct lru_eviction_policy_meta *node;
+	struct lru_no_balance_eviction_policy_meta *node;
 	unsigned int curr_head_index;
 
 	ENV_BUG_ON(collision_index == end_marker);
 
-	node = &ocf_metadata_get_eviction_policy(cache, collision_index)->lru;
-	node->hot = false;
+	node = &ocf_metadata_get_eviction_policy(cache, collision_index)->lru_no_balance;
 
 	/* First node to be added/ */
 	if (!list->num_nodes)  {
@@ -44,7 +43,7 @@ static void add_lru_head(ocf_cache_t cache,
 
 		list->num_nodes = 1;
 	} else {
-		struct lru_eviction_policy_meta *curr_head;
+		struct lru_no_balance_eviction_policy_meta *curr_head;
 
 		/* Not the first node to be added. */
 		curr_head_index = list->head;
@@ -52,15 +51,11 @@ static void add_lru_head(ocf_cache_t cache,
 		ENV_BUG_ON(curr_head_index == end_marker);
 
 		curr_head = &ocf_metadata_get_eviction_policy(cache,
-				curr_head_index)->lru;
+				curr_head_index)->lru_no_balance;
 
 		node->next = curr_head_index;
 		node->prev = end_marker;
 		curr_head->prev = collision_index;
-		node->hot = true;
-		if (!curr_head->hot)
-			list->last_hot = collision_index;
-		++list->num_hot;
 
 		list->head = collision_index;
 
@@ -68,24 +63,21 @@ static void add_lru_head(ocf_cache_t cache,
 	}
 }
 
-/* Deletes the node with the given collision_index from the lru list */
-static void remove_lru_list(ocf_cache_t cache,
-		struct ocf_lru_list *list,
+/* Deletes the node with the given collision_index from the lru no_balance list */
+static void remove_lru_no_balance_list(ocf_cache_t cache,
+		struct ocf_lru_no_balance_list *list,
 		unsigned int collision_index)
 {
 	int is_head = 0, is_tail = 0;
 	uint32_t prev_lru_node, next_lru_node;
-	struct lru_eviction_policy_meta *node;
+	struct lru_no_balance_eviction_policy_meta *node;
 
 	ENV_BUG_ON(collision_index == end_marker);
 
-	node = &ocf_metadata_get_eviction_policy(cache, collision_index)->lru;
+	node = &ocf_metadata_get_eviction_policy(cache, collision_index)->lru_no_balance;
 
 	is_head = (list->head == collision_index);
 	is_tail = (list->tail == collision_index);
-
-	if (node->hot)
-		--list->num_hot;
 
 	/* Set prev and next (even if not existent) */
 	next_lru_node = node->next;
@@ -100,25 +92,18 @@ static void remove_lru_list(ocf_cache_t cache,
 
 		list->head = end_marker;
 		list->tail = end_marker;
-		list->last_hot = end_marker;
-		ENV_BUG_ON(list->num_hot != 0);
 	}
 
 	/* Case 2: else if this collision_index is LRU head, but not tail,
 	 * update head and return
 	 */
 	else if (is_head) {
-		struct lru_eviction_policy_meta *next_node;
+		struct lru_no_balance_eviction_policy_meta *next_node;
 
 		ENV_BUG_ON(next_lru_node == end_marker);
 
 		next_node = &ocf_metadata_get_eviction_policy(cache,
-				next_lru_node)->lru;
-
-		if (list->last_hot == collision_index) {
-			ENV_BUG_ON(list->num_hot != 0);
-			list->last_hot = end_marker;
-		}
+				next_lru_node)->lru_no_balance;
 
 		list->head = next_lru_node;
 
@@ -130,14 +115,14 @@ static void remove_lru_list(ocf_cache_t cache,
 	 * update tail and return
 	 */
 	else if (is_tail) {
-		struct lru_eviction_policy_meta *prev_node;
+		struct lru_no_balance_eviction_policy_meta *prev_node;
 
 		ENV_BUG_ON(prev_lru_node == end_marker);
 
 		list->tail = prev_lru_node;
 
 		prev_node = &ocf_metadata_get_eviction_policy(cache,
-				prev_lru_node)->lru;
+				prev_lru_node)->lru_no_balance;
 
 		node->prev = end_marker;
 		prev_node->next = end_marker;
@@ -147,21 +132,16 @@ static void remove_lru_list(ocf_cache_t cache,
 	 * change to the head and the tail pointers.
 	 */
 	else {
-		struct lru_eviction_policy_meta *prev_node;
-		struct lru_eviction_policy_meta *next_node;
+		struct lru_no_balance_eviction_policy_meta *prev_node;
+		struct lru_no_balance_eviction_policy_meta *next_node;
 
 		ENV_BUG_ON(next_lru_node == end_marker);
 		ENV_BUG_ON(prev_lru_node == end_marker);
 
 		next_node = &ocf_metadata_get_eviction_policy(cache,
-				next_lru_node)->lru;
+				next_lru_node)->lru_no_balance;
 		prev_node = &ocf_metadata_get_eviction_policy(cache,
-				prev_lru_node)->lru;
-
-		if (list->last_hot == collision_index) {
-			ENV_BUG_ON(list->num_hot == 0);
-			list->last_hot = prev_lru_node;
-		}
+				prev_lru_node)->lru_no_balance;
 
 		/* Update prev and next nodes */
 		prev_node->next = node->next;
@@ -171,102 +151,51 @@ static void remove_lru_list(ocf_cache_t cache,
 		node->next = end_marker;
 		node->prev = end_marker;
 	}
-
-	node->hot = false;
 	--list->num_nodes;
 }
 
-/* Increase / decrease number of hot elements to achieve target count.
- * Asssumes that the list has hot element clustered together at the
- * head of the list.
- */
-static void balance_lru_list(ocf_cache_t cache,
-		struct ocf_lru_list *list)
+/*-- End of LRU no_balance functions*/
+
+void evp_lru_no_balance_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 {
-	unsigned target_hot_count = list->num_nodes / OCF_LRU_HOT_RATIO;
-	struct lru_eviction_policy_meta *node;
+	struct lru_no_balance_eviction_policy_meta *node;
 
-	if (target_hot_count == list->num_hot)
-		return;
+	node = &ocf_metadata_get_eviction_policy(cache, cline)->lru_no_balance;
 
-	if (list->num_hot == 0) {
-		node = &ocf_metadata_get_eviction_policy(cache,
-				list->head)->lru;
-		list->last_hot = list->head;
-		list->num_hot = 1;
-		node->hot = 1;
-		return;
-	}
-
-	ENV_BUG_ON(list->last_hot == end_marker);
-	node = &ocf_metadata_get_eviction_policy(cache,
-			list->last_hot)->lru;
-
-	if (target_hot_count > list->num_hot) {
-		++list->num_hot;
-		list->last_hot = node->next;
-		node = &ocf_metadata_get_eviction_policy(cache,
-				node->next)->lru;
-		node->hot = true;
-	} else {
-		if (list->last_hot == list->head) {
-			node->hot = false;
-			list->num_hot = 0;
-			list->last_hot = end_marker;
-		} else {
-			ENV_BUG_ON(node->prev == end_marker);
-			node->hot = false;
-			--list->num_hot;
-			list->last_hot = node->prev;
-		}
-	}
-}
-
-
-/*-- End of LRU functions*/
-
-void evp_lru_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)
-{
-	struct lru_eviction_policy_meta *node;
-
-	node = &ocf_metadata_get_eviction_policy(cache, cline)->lru;
-
-	node->hot = false;
 	node->prev = end_marker;
 	node->next = end_marker;
 }
 
-static struct ocf_lru_list *evp_lru_get_list(struct ocf_user_part *part,
+static struct ocf_lru_no_balance_list *evp_lru_no_balance_get_list(struct ocf_user_part *part,
 		uint32_t evp, bool clean)
 {
-	return clean ? &part->runtime->eviction[evp].policy.lru.clean :
-			&part->runtime->eviction[evp].policy.lru.dirty;
+	return clean ? &part->runtime->eviction[evp].policy.lru_no_balance.clean :
+			&part->runtime->eviction[evp].policy.lru_no_balance.dirty;
 }
 
-static inline struct ocf_lru_list *evp_get_cline_list(ocf_cache_t cache,
+static inline struct ocf_lru_no_balance_list *evp_get_cline_list(ocf_cache_t cache,
 		ocf_cache_line_t cline)
 {
 	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache, cline);
 	struct ocf_user_part *part = &cache->user_parts[part_id];
 	uint32_t ev_list = (cline % OCF_NUM_EVICTION_LISTS);
 
-	return evp_lru_get_list(part, ev_list,
+	return evp_lru_no_balance_get_list(part, ev_list,
 			!metadata_test_dirty(cache, cline));
 }
 
 /* the caller must hold the metadata lock */
-void evp_lru_rm_cline(ocf_cache_t cache, ocf_cache_line_t cline)
+void evp_lru_no_balance_rm_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 {
-	struct ocf_lru_list *list;
+	struct ocf_lru_no_balance_list *list;
 
 	list = evp_get_cline_list(cache, cline);
-	remove_lru_list(cache, list, cline);
-	balance_lru_list(cache, list);
+	remove_lru_no_balance_list(cache, list, cline);
 }
 
-static inline void lru_iter_init(struct ocf_lru_iter *iter, ocf_cache_t cache,
+static inline void lru_no_balance_iter_init(struct ocf_lru_no_balance_iter *iter, ocf_cache_t cache,
 		struct ocf_user_part *part, uint32_t start_evp, bool clean,
-		bool cl_lock_write, _lru_hash_locked_pfn hash_locked,
+		bool cl_lock_write, _lru_no_balance_hash_locked_pfn hash_locked,
 		struct ocf_request *req)
 {
 	uint32_t i;
@@ -287,34 +216,34 @@ static inline void lru_iter_init(struct ocf_lru_iter *iter, ocf_cache_t cache,
 	iter->req = req;
 
 	for (i = 0; i < OCF_NUM_EVICTION_LISTS; i++)
-		iter->curr_cline[i] = evp_lru_get_list(part, i, clean)->tail;
+		iter->curr_cline[i] = evp_lru_no_balance_get_list(part, i, clean)->tail;
 }
 
-static inline void lru_iter_cleaning_init(struct ocf_lru_iter *iter,
+static inline void lru_no_balance_iter_cleaning_init(struct ocf_lru_no_balance_iter *iter,
 		ocf_cache_t cache, struct ocf_user_part *part,
 		uint32_t start_evp)
 {
 	/* Lock cachelines for read, non-exclusive access */
-	lru_iter_init(iter, cache, part, start_evp, false, false,
+	lru_no_balance_iter_init(iter, cache, part, start_evp, false, false,
 			NULL, NULL);
 }
 
-static inline void lru_iter_eviction_init(struct ocf_lru_iter *iter,
+static inline void lru_no_balance_iter_eviction_init(struct ocf_lru_no_balance_iter *iter,
 		ocf_cache_t cache, struct ocf_user_part *part,
 		uint32_t start_evp, bool cl_lock_write,
 		struct ocf_request *req)
 {
 	/* Lock hash buckets for write, cachelines according to user request,
 	 * however exclusive cacheline access is needed even in case of read
-	 * access. _evp_lru_evict_hash_locked tells whether given hash bucket
+	 * access. _evp_lru_no_balance_evict_hash_locked tells whether given hash bucket
 	 * is already locked as part of request hash locking (to avoid attempt
 	 * to acquire the same hash bucket lock twice) */
-	lru_iter_init(iter, cache, part, start_evp, true, cl_lock_write,
+	lru_no_balance_iter_init(iter, cache, part, start_evp, true, cl_lock_write,
 		ocf_req_hash_in_range, req);
 }
 
 
-static inline uint32_t _lru_next_evp(struct ocf_lru_iter *iter)
+static inline uint32_t _lru_no_balance_next_evp(struct ocf_lru_no_balance_iter *iter)
 {
 	unsigned increment;
 
@@ -328,23 +257,23 @@ static inline uint32_t _lru_next_evp(struct ocf_lru_iter *iter)
 
 
 
-static inline bool _lru_evp_is_empty(struct ocf_lru_iter *iter)
+static inline bool _lru_no_balance_evp_is_empty(struct ocf_lru_no_balance_iter *iter)
 {
 	return !(iter->next_avail_evp & (1ULL << (OCF_NUM_EVICTION_LISTS - 1)));
 }
 
-static inline void _lru_evp_set_empty(struct ocf_lru_iter *iter)
+static inline void _lru_no_balance_evp_set_empty(struct ocf_lru_no_balance_iter *iter)
 {
 	iter->next_avail_evp &= ~(1ULL << (OCF_NUM_EVICTION_LISTS - 1));
 	iter->num_avail_evps--;
 }
 
-static inline bool _lru_evp_all_empty(struct ocf_lru_iter *iter)
+static inline bool _lru_no_balance_evp_all_empty(struct ocf_lru_no_balance_iter *iter)
 {
 	return iter->num_avail_evps == 0;
 }
 
-static bool inline _lru_trylock_cacheline(struct ocf_lru_iter *iter,
+static bool inline _lru_no_balance_trylock_cacheline(struct ocf_lru_no_balance_iter *iter,
 		ocf_cache_line_t cline)
 {
 	struct ocf_cache_line_concurrency *c =
@@ -355,7 +284,7 @@ static bool inline _lru_trylock_cacheline(struct ocf_lru_iter *iter,
 		ocf_cache_line_try_lock_rd(c, cline);
 }
 
-static void inline _lru_unlock_cacheline(struct ocf_lru_iter *iter,
+static void inline _lru_no_balance_unlock_cacheline(struct ocf_lru_no_balance_iter *iter,
 		ocf_cache_line_t cline)
 {
 	struct ocf_cache_line_concurrency *c =
@@ -367,7 +296,7 @@ static void inline _lru_unlock_cacheline(struct ocf_lru_iter *iter,
 		ocf_cache_line_unlock_rd(c, cline);
 }
 
-static bool inline _lru_trylock_hash(struct ocf_lru_iter *iter,
+static bool inline _lru_no_balance_trylock_hash(struct ocf_lru_no_balance_iter *iter,
 		ocf_core_id_t core_id, uint64_t core_line)
 {
 	if (iter->hash_locked != NULL && iter->hash_locked(
@@ -380,7 +309,7 @@ static bool inline _lru_trylock_hash(struct ocf_lru_iter *iter,
 			core_id, core_line);
 }
 
-static void inline _lru_unlock_hash(struct ocf_lru_iter *iter,
+static void inline _lru_no_balance_unlock_hash(struct ocf_lru_no_balance_iter *iter,
 		ocf_core_id_t core_id, uint64_t core_line)
 {
 	if (iter->hash_locked != NULL && iter->hash_locked(
@@ -393,14 +322,14 @@ static void inline _lru_unlock_hash(struct ocf_lru_iter *iter,
 			core_id, core_line);
 }
 
-static bool inline _lru_iter_evition_lock(struct ocf_lru_iter *iter,
+static bool inline _lru_no_balance_iter_evition_lock(struct ocf_lru_no_balance_iter *iter,
 		ocf_cache_line_t cache_line,
 		ocf_core_id_t *core_id, uint64_t *core_line)
 
 {
 	struct ocf_request *req = iter->req;
 
-	if (!_lru_trylock_cacheline(iter, cache_line))
+	if (!_lru_no_balance_trylock_cacheline(iter, cache_line))
 		return false;
 
 	ocf_metadata_get_core_info(iter->cache, cache_line,
@@ -410,65 +339,64 @@ static bool inline _lru_iter_evition_lock(struct ocf_lru_iter *iter,
 	if (*core_id == ocf_core_get_id(req->core) &&
 			*core_line >= req->core_line_first &&
 			*core_line <= req->core_line_last) {
-		_lru_unlock_cacheline(iter, cache_line);
+		_lru_no_balance_unlock_cacheline(iter, cache_line);
 		return false;
 	}
 
-	if (!_lru_trylock_hash(iter, *core_id, *core_line)) {
-		_lru_unlock_cacheline(iter, cache_line);
+	if (!_lru_no_balance_trylock_hash(iter, *core_id, *core_line)) {
+		_lru_no_balance_unlock_cacheline(iter, cache_line);
 		return false;
 	}
 
 	if (!ocf_cache_line_is_locked_exclusively(iter->cache,
 				cache_line)) {
-		_lru_unlock_hash(iter, *core_id, *core_line);
-		_lru_unlock_cacheline(iter, cache_line);
+		_lru_no_balance_unlock_hash(iter, *core_id, *core_line);
+		_lru_no_balance_unlock_cacheline(iter, cache_line);
 		return false;
 	}
 
 	return true;
 }
 
-/* Get next clean cacheline from tail of lru lists. Caller must not hold any
+/* Get next clean cacheline from tail of lru no_balance lists. Caller must not hold any
  * eviction list lock. Returned cacheline is read or write locked, depending on
  * iter->write_lock. Returned cacheline has corresponding metadata hash bucket
- * locked. Cacheline is moved to the head of lru list before being returned */
-static inline ocf_cache_line_t lru_iter_eviction_next(struct ocf_lru_iter *iter,
+ * locked. Cacheline is moved to the head of lru no_balance list before being returned */
+static inline ocf_cache_line_t lru_no_balance_iter_eviction_next(struct ocf_lru_no_balance_iter *iter,
 		ocf_core_id_t *core_id, uint64_t *core_line)
 {
 	uint32_t curr_evp;
 	ocf_cache_line_t  cline;
 	ocf_cache_t cache = iter->cache;
 	struct ocf_user_part *part = iter->part;
-	struct ocf_lru_list *list;
+	struct ocf_lru_no_balance_list *list;
 
 	do {
-		curr_evp = _lru_next_evp(iter);
+		curr_evp = _lru_no_balance_next_evp(iter);
 
 		ocf_metadata_eviction_wr_lock(&cache->metadata.lock, curr_evp);
 
-		list = evp_lru_get_list(part, curr_evp, iter->clean);
+		list = evp_lru_no_balance_get_list(part, curr_evp, iter->clean);
 
 		cline = list->tail;
-		while (cline != end_marker && !_lru_iter_evition_lock(iter,
+		while (cline != end_marker && !_lru_no_balance_iter_evition_lock(iter,
 				cline, core_id, core_line)) {
 			cline = ocf_metadata_get_eviction_policy(
-					iter->cache, cline)->lru.prev;
+					iter->cache, cline)->lru_no_balance.prev;
 		}
 
 		if (cline != end_marker) {
-			remove_lru_list(cache, list, cline);
-			add_lru_head(cache, list, cline);
-			balance_lru_list(cache, list);
+			remove_lru_no_balance_list(cache, list, cline);
+			add_lru_no_balance_head(cache, list, cline);
 		}
 
 		ocf_metadata_eviction_wr_unlock(&cache->metadata.lock, curr_evp);
 
-		if (cline == end_marker && !_lru_evp_is_empty(iter)) {
+		if (cline == end_marker && !_lru_no_balance_evp_is_empty(iter)) {
 			/* mark list as empty */
-			_lru_evp_set_empty(iter);
+			_lru_no_balance_evp_set_empty(iter);
 		}
-	} while (cline == end_marker && !_lru_evp_all_empty(iter));
+	} while (cline == end_marker && !_lru_no_balance_evp_all_empty(iter));
 
 	return cline;
 }
@@ -476,36 +404,36 @@ static inline ocf_cache_line_t lru_iter_eviction_next(struct ocf_lru_iter *iter,
 /* Get next dirty cacheline from tail of lru lists. Caller must hold all
  * eviction list locks during entire iteration proces. Returned cacheline
  * is read or write locked, depending on iter->write_lock */
-static inline ocf_cache_line_t lru_iter_cleaning_next(struct ocf_lru_iter *iter)
+static inline ocf_cache_line_t lru_no_balance_iter_cleaning_next(struct ocf_lru_no_balance_iter *iter)
 {
 	uint32_t curr_evp;
 	ocf_cache_line_t  cline;
 
 	do {
-		curr_evp = _lru_next_evp(iter);
+		curr_evp = _lru_no_balance_next_evp(iter);
 		cline = iter->curr_cline[curr_evp];
 
-		while (cline != end_marker && !_lru_trylock_cacheline(iter,
+		while (cline != end_marker && !_lru_no_balance_trylock_cacheline(iter,
 				cline)) {
 			cline = ocf_metadata_get_eviction_policy(
-					 iter->cache, cline)->lru.prev;
+					 iter->cache, cline)->lru_no_balance.prev;
 		}
 		if (cline != end_marker) {
 			iter->curr_cline[curr_evp] =
 				ocf_metadata_get_eviction_policy(
-						iter->cache , cline)->lru.prev;
+						iter->cache , cline)->lru_no_balance.prev;
 		}
 
-		if (cline == end_marker && !_lru_evp_is_empty(iter)) {
+		if (cline == end_marker && !_lru_no_balance_evp_is_empty(iter)) {
 			/* mark list as empty */
-			_lru_evp_set_empty(iter);
+			_lru_no_balance_evp_set_empty(iter);
 		}
-	} while (cline == end_marker && !_lru_evp_all_empty(iter));
+	} while (cline == end_marker && !_lru_no_balance_evp_all_empty(iter));
 
 	return cline;
 }
 
-static void evp_lru_clean_end(void *private_data, int error)
+static void evp_lru_no_balance_clean_end(void *private_data, int error)
 {
 	struct ocf_part_cleaning_ctx *ctx = private_data;
 	unsigned i;
@@ -519,7 +447,7 @@ static void evp_lru_clean_end(void *private_data, int error)
 	ocf_refcnt_dec(&ctx->counter);
 }
 
-static int evp_lru_clean_get(ocf_cache_t cache, void *getter_context,
+static int evp_lru_no_balance_clean_get(ocf_cache_t cache, void *getter_context,
 		uint32_t idx, ocf_cache_line_t *line)
 {
 	struct ocf_part_cleaning_ctx *ctx = getter_context;
@@ -532,7 +460,7 @@ static int evp_lru_clean_get(ocf_cache_t cache, void *getter_context,
 	return 0;
 }
 
-void evp_lru_clean(ocf_cache_t cache, struct ocf_user_part *part,
+void evp_lru_no_balance_clean(ocf_cache_t cache, struct ocf_user_part *part,
 		ocf_queue_t io_queue, uint32_t count)
 {
 	struct ocf_part_cleaning_ctx *ctx = &part->cleaning;
@@ -542,9 +470,9 @@ void evp_lru_clean(ocf_cache_t cache, struct ocf_user_part *part,
 		.do_sort = true,
 
 		.cmpl_context = &part->cleaning,
-		.cmpl_fn = evp_lru_clean_end,
+		.cmpl_fn = evp_lru_no_balance_clean_end,
 
-		.getter = evp_lru_clean_get,
+		.getter = evp_lru_no_balance_clean_get,
 		.getter_context = &part->cleaning,
 
 		.count = min(count, OCF_EVICTION_CLEAN_SIZE),
@@ -552,7 +480,7 @@ void evp_lru_clean(ocf_cache_t cache, struct ocf_user_part *part,
 		.io_queue = io_queue
 	};
 	ocf_cache_line_t *cline = part->cleaning.cline;
-	struct ocf_lru_iter iter;
+	struct ocf_lru_no_balance_iter iter;
 	unsigned evp;
 	int cnt;
 	unsigned i;
@@ -580,10 +508,10 @@ void evp_lru_clean(ocf_cache_t cache, struct ocf_user_part *part,
 
 	OCF_METADATA_EVICTION_WR_LOCK_ALL();
 
-	lru_iter_cleaning_init(&iter, cache, part, evp);
+	lru_no_balance_iter_cleaning_init(&iter, cache, part, evp);
 	i = 0;
 	while (i < OCF_EVICTION_CLEAN_SIZE) {
-		cline[i] = lru_iter_cleaning_next(&iter);
+		cline[i] = lru_no_balance_iter_cleaning_next(&iter);
 		if (cline[i] == end_marker)
 			break;
 		i++;
@@ -598,7 +526,7 @@ void evp_lru_clean(ocf_cache_t cache, struct ocf_user_part *part,
 	ocf_cleaner_fire(cache, &attribs);
 }
 
-bool evp_lru_can_evict(ocf_cache_t cache)
+bool evp_lru_no_balance_can_evict(ocf_cache_t cache)
 {
 	if (env_atomic_read(&cache->pending_eviction_clines) >=
 			OCF_PENDING_EVICTION_LIMIT) {
@@ -609,10 +537,10 @@ bool evp_lru_can_evict(ocf_cache_t cache)
 }
 
 /* the caller must hold the metadata lock */
-uint32_t evp_lru_req_clines(struct ocf_request *req,
+uint32_t evp_lru_no_balance_req_clines(struct ocf_request *req,
 		struct ocf_user_part *part, uint32_t cline_no)
 {
-	struct ocf_lru_iter iter;
+	struct ocf_lru_no_balance_iter iter;
 	uint32_t i;
 	ocf_cache_line_t cline;
 	uint64_t core_line;
@@ -637,14 +565,14 @@ uint32_t evp_lru_req_clines(struct ocf_request *req,
 
 	evp = req->io_queue->eviction_idx++ % OCF_NUM_EVICTION_LISTS;
 
-	lru_iter_eviction_init(&iter, cache, part, evp, cl_write_lock, req);
+	lru_no_balance_iter_eviction_init(&iter, cache, part, evp, cl_write_lock, req);
 
 	i = 0;
 	while (i < cline_no) {
-		if (!evp_lru_can_evict(cache))
+		if (!evp_lru_no_balance_can_evict(cache))
 			break;
 
-		cline = lru_iter_eviction_next(&iter, &core_id, &core_line);
+		cline = lru_no_balance_iter_eviction_next(&iter, &core_id, &core_line);
 
 		if (cline == end_marker)
 			break;
@@ -674,7 +602,7 @@ uint32_t evp_lru_req_clines(struct ocf_request *req,
 		env_atomic_dec(&core->runtime_meta->
 				part_counters[part->id].cached_clines);
 
-		_lru_unlock_hash(&iter, core_id, core_line);
+		_lru_no_balance_unlock_hash(&iter, core_id, core_line);
 
 		ocf_map_cache_line(req, req_idx, cline);
 
@@ -696,20 +624,12 @@ uint32_t evp_lru_req_clines(struct ocf_request *req,
 }
 
 /* the caller must hold the metadata lock */
-void evp_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
+void evp_lru_no_balance_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 {
-	struct lru_eviction_policy_meta *node;
-	struct ocf_lru_list *list;
-	bool hot;
+	struct lru_no_balance_eviction_policy_meta *node;
+	struct ocf_lru_no_balance_list *list;
 
-	node = &ocf_metadata_get_eviction_policy(cache, cline)->lru;
-
-	OCF_METADATA_EVICTION_RD_LOCK(cline);
-	hot = node->hot;
-	OCF_METADATA_EVICTION_RD_UNLOCK(cline);
-
-	if (hot)
-		return;
+	node = &ocf_metadata_get_eviction_policy(cache, cline)->lru_no_balance;
 
 	list = evp_get_cline_list(cache, cline);
 
@@ -718,73 +638,66 @@ void evp_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	if (node->next != end_marker ||
 			node->prev != end_marker ||
 			list->head == cline || list->tail == cline) {
-		remove_lru_list(cache, list, cline);
+		remove_lru_no_balance_list(cache, list, cline);
 	}
 
 	/* Update LRU */
-	add_lru_head(cache, list, cline);
-	balance_lru_list(cache, list);
+	add_lru_no_balance_head(cache, list, cline);
 
 	OCF_METADATA_EVICTION_WR_UNLOCK(cline);
 }
 
-static inline void _lru_init(struct ocf_lru_list *list)
+static inline void _lru_no_balance_init(struct ocf_lru_no_balance_list *list)
 {
 	list->num_nodes = 0;
 	list->head = end_marker;
 	list->tail = end_marker;
-	list->num_hot = 0;
-	list->last_hot = end_marker;
 }
 
-void evp_lru_init_evp(ocf_cache_t cache, struct ocf_user_part *part)
+void evp_lru_no_balance_init_evp(ocf_cache_t cache, struct ocf_user_part *part)
 {
-	struct ocf_lru_list *clean_list;
-	struct ocf_lru_list *dirty_list;
+	struct ocf_lru_no_balance_list *clean_list;
+	struct ocf_lru_no_balance_list *dirty_list;
 	uint32_t i;
 
 	for (i = 0; i < OCF_NUM_EVICTION_LISTS; i++) {
-		clean_list = evp_lru_get_list(part, i, true);
-		dirty_list = evp_lru_get_list(part, i, false);
+		clean_list = evp_lru_no_balance_get_list(part, i, true);
+		dirty_list = evp_lru_no_balance_get_list(part, i, false);
 
-		_lru_init(clean_list);
-		_lru_init(dirty_list);
+		_lru_no_balance_init(clean_list);
+		_lru_no_balance_init(dirty_list);
 	}
 }
 
-void evp_lru_clean_cline(ocf_cache_t cache, struct ocf_user_part *part,
+void evp_lru_no_balance_clean_cline(ocf_cache_t cache, struct ocf_user_part *part,
 		uint32_t cline)
 {
 	uint32_t ev_list = (cline % OCF_NUM_EVICTION_LISTS);
-	struct ocf_lru_list *clean_list;
-	struct ocf_lru_list *dirty_list;
+	struct ocf_lru_no_balance_list *clean_list;
+	struct ocf_lru_no_balance_list *dirty_list;
 
-	clean_list = evp_lru_get_list(part, ev_list, true);
-	dirty_list = evp_lru_get_list(part, ev_list, false);
+	clean_list = evp_lru_no_balance_get_list(part, ev_list, true);
+	dirty_list = evp_lru_no_balance_get_list(part, ev_list, false);
 
 	OCF_METADATA_EVICTION_WR_LOCK(cline);
-	remove_lru_list(cache, dirty_list, cline);
-	balance_lru_list(cache, dirty_list);
-	add_lru_head(cache, clean_list, cline);
-	balance_lru_list(cache, clean_list);
+	remove_lru_no_balance_list(cache, dirty_list, cline);
+	add_lru_no_balance_head(cache, clean_list, cline);
 	OCF_METADATA_EVICTION_WR_UNLOCK(cline);
 }
 
-void evp_lru_dirty_cline(ocf_cache_t cache, struct ocf_user_part *part,
+void evp_lru_no_balance_dirty_cline(ocf_cache_t cache, struct ocf_user_part *part,
 		uint32_t cline)
 {
 	uint32_t ev_list = (cline % OCF_NUM_EVICTION_LISTS);
-	struct ocf_lru_list *clean_list;
-	struct ocf_lru_list *dirty_list;
+	struct ocf_lru_no_balance_list *clean_list;
+	struct ocf_lru_no_balance_list *dirty_list;
 
-	clean_list = evp_lru_get_list(part, ev_list, true);
-	dirty_list = evp_lru_get_list(part, ev_list, false);
+	clean_list = evp_lru_no_balance_get_list(part, ev_list, true);
+	dirty_list = evp_lru_no_balance_get_list(part, ev_list, false);
 
 	OCF_METADATA_EVICTION_WR_LOCK(cline);
-	remove_lru_list(cache, clean_list, cline);
-	balance_lru_list(cache, clean_list);
-	add_lru_head(cache, dirty_list, cline);
-	balance_lru_list(cache, dirty_list);
+	remove_lru_no_balance_list(cache, clean_list, cline);
+	add_lru_no_balance_head(cache, dirty_list, cline);
 	OCF_METADATA_EVICTION_WR_UNLOCK(cline);
 }
 

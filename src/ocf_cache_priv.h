@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+
 #ifndef __OCF_CACHE_PRIV_H__
 #define __OCF_CACHE_PRIV_H__
 
@@ -44,7 +45,7 @@ struct ocf_trace {
 struct ocf_cache_device {
 	struct ocf_volume volume;
 
-	/* Hash Table contains contains pointer to the entry in
+	/* Hash Table contains pointer to the entry in
 	 * Collision Table so it actually contains collision Table
 	 * indexes.
 	 * Invalid entry is collision_table_entries.
